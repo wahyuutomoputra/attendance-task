@@ -1,14 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { PrismaClient, Prisma } from '@prisma/client';
-
-const prisma = new PrismaClient();
-
-type AttendanceWithUser = Awaited<ReturnType<typeof prisma.attendance.findFirst>> & {
-  user: {
-    name: string;
-    email: string;
-  };
-};
+import { AttendanceController } from '../controllers/attendance.controller';
 
 // Swagger schema definitions
 const checkInSchema = {
@@ -114,6 +105,8 @@ const reportSchema = {
 };
 
 async function routes(fastify: FastifyInstance) {
+  const attendanceController = new AttendanceController();
+
   // Authenticate all routes in this plugin
   fastify.addHook('preHandler', async (request, reply) => {
     try {
@@ -123,134 +116,9 @@ async function routes(fastify: FastifyInstance) {
     }
   });
 
-  // Check-in
-  fastify.post('/check-in', { schema: checkInSchema }, async (request, reply) => {
-    const userId = (request.user as { id: number }).id;
-    const { location, ipAddress, photoUrl } = request.body as {
-      location: string;
-      ipAddress: string;
-      photoUrl: string;
-    };
-
-    try {
-      // Check if user already checked in today
-      const existingAttendance = await prisma.attendance.findFirst({
-        where: {
-          userId,
-          checkIn: {
-            gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          },
-        },
-      });
-
-      if (existingAttendance) {
-        return reply.code(400).send({ error: 'Already checked in today' });
-      }
-
-      const attendance = await prisma.attendance.create({
-        data: {
-          userId,
-          location,
-          ipAddress,
-          photoUrl,
-        },
-      });
-
-      return attendance;
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(500).send({ error: 'Internal server error' });
-    }
-  });
-
-  // Check-out
-  fastify.post('/check-out', { schema: checkOutSchema }, async (request, reply) => {
-    const userId = (request.user as { id: number }).id;
-
-    try {
-      const attendance = await prisma.attendance.findFirst({
-        where: {
-          userId,
-          checkIn: {
-            gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          },
-          checkOut: null,
-        },
-      });
-
-      if (!attendance) {
-        return reply.code(400).send({ error: 'No active check-in found' });
-      }
-
-      const updatedAttendance = await prisma.attendance.update({
-        where: { id: attendance.id },
-        data: { checkOut: new Date() },
-      });
-
-      return updatedAttendance;
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(500).send({ error: 'Internal server error' });
-    }
-  });
-
-  // Get attendance report
-  fastify.get('/report', { schema: reportSchema }, async (request, reply) => {
-    const userId = (request.user as { id: number }).id;
-    const { startDate, endDate, timezone = 'UTC' } = request.query as {
-      startDate?: string;
-      endDate?: string;
-      timezone?: string;
-    };
-
-    try {
-      const whereClause: any = {
-        userId,
-      };
-
-      if (startDate) {
-        whereClause.checkIn = {
-          gte: new Date(startDate),
-        };
-      }
-
-      if (endDate) {
-        whereClause.checkIn = {
-          ...whereClause.checkIn,
-          lte: new Date(endDate),
-        };
-      }
-
-      const attendances = await prisma.attendance.findMany({
-        where: whereClause,
-        orderBy: {
-          checkIn: 'desc',
-        },
-        include: {
-          user: {
-            select: {
-              name: true,
-              email: true,
-            },
-          },
-        },
-      });
-
-      // Convert times to requested timezone
-      const formattedAttendances = attendances.map((attendance: AttendanceWithUser) => ({
-        ...attendance,
-        checkIn: attendance.checkIn.toLocaleString('en-US', { timeZone: timezone }),
-        checkOut: attendance.checkOut
-          ? attendance.checkOut.toLocaleString('en-US', { timeZone: timezone })
-          : null,
-      }));
-
-      return formattedAttendances;
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(500).send({ error: 'Internal server error' });
-    }
-  });
+  fastify.post('/check-in', { schema: checkInSchema }, attendanceController.checkIn.bind(attendanceController));
+  fastify.post('/check-out', { schema: checkOutSchema }, attendanceController.checkOut.bind(attendanceController));
+  fastify.get('/report', { schema: reportSchema }, attendanceController.getReport.bind(attendanceController));
 }
 
 export default routes; 

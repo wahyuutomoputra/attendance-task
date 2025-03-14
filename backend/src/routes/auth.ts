@@ -1,8 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
-
-const prisma = new PrismaClient();
+import { AuthController } from '../controllers/auth.controller';
 
 // Swagger schema definitions
 const loginSchema = {
@@ -81,74 +78,10 @@ const registerSchema = {
 };
 
 async function routes(fastify: FastifyInstance) {
-  fastify.post('/login', { schema: loginSchema }, async (request, reply) => {
-    const { email, password } = request.body as { email: string; password: string };
+  const authController = new AuthController();
 
-    try {
-      const user = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      if (!user) {
-        return reply.code(401).send({ error: 'Invalid email or password' });
-      }
-
-      const validPassword = await bcrypt.compare(password, user.password);
-      if (!validPassword) {
-        return reply.code(401).send({ error: 'Invalid email or password' });
-      }
-
-      const token = fastify.jwt.sign({ id: user.id });
-
-      const { password: _, ...userWithoutPassword } = user;
-      return { user: userWithoutPassword, token };
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(500).send({ error: 'Internal server error' });
-    }
-  });
-
-  fastify.post('/register', { schema: registerSchema }, async (request, reply) => {
-    const { email, password, name } = request.body as {
-      email: string;
-      password: string;
-      name: string;
-    };
-
-    try {
-      const existingUser = await prisma.user.findUnique({
-        where: { email },
-      });
-
-      if (existingUser) {
-        return reply.code(400).send({ error: 'Email already registered' });
-      }
-
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
-
-      const user = await prisma.user.create({
-        data: {
-          email,
-          password: hashedPassword,
-          name,
-        },
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          role: true,
-        },
-      });
-
-      const token = fastify.jwt.sign({ id: user.id });
-
-      return { user, token };
-    } catch (error) {
-      request.log.error(error);
-      return reply.code(500).send({ error: 'Internal server error' });
-    }
-  });
+  fastify.post('/login', { schema: loginSchema }, authController.login.bind(authController));
+  fastify.post('/register', { schema: registerSchema }, authController.register.bind(authController));
 }
 
 export default routes;
