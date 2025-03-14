@@ -7,7 +7,7 @@ A full-stack application for managing employee attendance with features like che
 For local development:
 - Node.js (v18 or higher)
 - npm
-- PostgreSQL
+- MySQL
 
 For Docker deployment:
 - Docker
@@ -32,6 +32,7 @@ The application will be available at:
 - Frontend: http://localhost:3000
 - Backend: http://localhost:5051
 - API Documentation: http://localhost:5051/documentation
+- Database: localhost:3307 (MySQL)
 
 ## Local Development Setup
 
@@ -68,6 +69,45 @@ This will start:
 - Frontend at http://localhost:3000
 - Backend at http://localhost:5051
 - API Documentation at http://localhost:5051/documentation
+
+## Testing
+
+The project uses Playwright for end-to-end testing. Tests are located in the `frontend/tests` directory.
+
+### Running Tests
+
+```bash
+# Run all tests
+cd frontend && npm run test
+
+# Run tests with UI mode (good for debugging)
+cd frontend && npm run test:ui
+
+# Run tests in debug mode
+cd frontend && npm run test:debug
+
+# View test reports
+cd frontend && npm run test:report
+```
+
+### Test Coverage
+
+The tests cover:
+- Authentication flows
+  - Login form validation
+  - Error handling
+  - Invalid credentials
+
+- Attendance features
+  - Check-in/out functionality
+  - Attendance report display
+  - Profile section
+
+### Supported Browsers
+
+Tests run on multiple browsers and devices:
+- Desktop: Chrome, Firefox, Safari
+- Mobile: Chrome (Pixel 5), Safari (iPhone 12)
 
 ## Production
 

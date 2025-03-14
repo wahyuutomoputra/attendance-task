@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -90,17 +90,18 @@ async function routes(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.code(401).send({ error: 'Invalid credentials' });
+        return reply.code(401).send({ error: 'Invalid email or password' });
       }
 
       const validPassword = await bcrypt.compare(password, user.password);
       if (!validPassword) {
-        return reply.code(401).send({ error: 'Invalid credentials' });
+        return reply.code(401).send({ error: 'Invalid email or password' });
       }
 
-      const token = fastify.jwt.sign({ id: user.id, email: user.email, role: user.role });
+      const token = fastify.jwt.sign({ id: user.id });
 
-      return { token, user: { id: user.id, email: user.email, name: user.name, role: user.role } };
+      const { password: _, ...userWithoutPassword } = user;
+      return { user: userWithoutPassword, token };
     } catch (error) {
       request.log.error(error);
       return reply.code(500).send({ error: 'Internal server error' });
@@ -123,21 +124,26 @@ async function routes(fastify: FastifyInstance) {
         return reply.code(400).send({ error: 'Email already registered' });
       }
 
-      const hashedPassword = await bcrypt.hash(password, 10);
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+
       const user = await prisma.user.create({
         data: {
           email,
           password: hashedPassword,
           name,
         },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          role: true,
+        },
       });
 
-      const token = fastify.jwt.sign({ id: user.id, email: user.email, role: user.role });
+      const token = fastify.jwt.sign({ id: user.id });
 
-      return {
-        token,
-        user: { id: user.id, email: user.email, name: user.name, role: user.role },
-      };
+      return { user, token };
     } catch (error) {
       request.log.error(error);
       return reply.code(500).send({ error: 'Internal server error' });
